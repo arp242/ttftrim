@@ -1,0 +1,152 @@
+#!/usr/bin/python3
+
+import fontforge
+import os
+import sys
+import tempfile
+import unicodedata
+import subprocess
+
+if len(sys.argv) < 3:
+    print(f'usage: {sys.argv[0]} input-file output-file [corpus]', file=sys.stderr)
+    sys.exit(1)
+
+def in_path(util):
+    return subprocess.run(['hash', util], shell=True,
+                           stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE) == 0
+
+def get_editor():
+    editor = os.getenv('EDITOR')
+    if editor in [None, '']:
+        for editor in ['vim', 'vi', 'nano', 'ee', 'emacs']:
+            if in_path(editor):
+                break
+        else:
+            print("Can't find an editor; set your EDITOR")
+            sys.exit(1)
+    return editor
+
+def get_chars(file):
+    try:
+        with open(file) as fp:
+            chars = fp.read()
+    except UnicodeDecodeError:
+        return set()
+
+    if '\x00' in chars:
+        return set()
+    return set(chars)
+
+def read_corpus(path):
+    if os.path.isfile(path):
+        return get_chars(file)
+
+    chars = set()
+    for root, dirs, files in os.walk(path):
+        for f in files:
+            chars.update(get_chars(root+'/'+f))
+    return chars
+
+if __name__ == '__main__':
+    src, dst = sys.argv[1], sys.argv[2]
+    corpus = None
+    if len(sys.argv) > 3:
+        corpus = read_corpus(sys.argv[3])
+
+    font = fontforge.open(src)
+    size_before = os.path.getsize(src)
+
+    num = 0
+    glyphs = []
+    for k in font:
+        glyphs += [font[k]]
+        num += 1
+
+    rows = []
+    colsizes = [0, 0, 0, 0, 0]
+    for g in glyphs:
+        try:
+            char = chr(g.unicode)
+            uni = unicodedata.name(char)
+        except ValueError:
+            char = g.glyphname
+            uni = g.glyphname
+        row = [f'U+{g.unicode:X}', char, uni, g.glyphclass, g.glyphname]
+        rows += [row]
+
+        for i, c in enumerate(row):
+            if len(c) > colsizes[i]:
+                colsizes[i] = len(c)
+
+    with tempfile.NamedTemporaryFile('w+', prefix='ttftrim') as fp:
+        print(f'# {num} glyphs in {sys.argv[1]}', file=fp)
+        print("# Remove or comment out glyphs you don't want", file=fp)
+        print(file=fp)
+
+        for r in rows:
+            if corpus is not None and r[0] != 'U+-1' and r[1] not in corpus:
+                fp.write('# ')
+
+            for i, c in enumerate(r):
+                fp.write(c)
+                fp.write(' ' * (colsizes[i]-len(c)+1))
+            fp.write('\n')
+
+        fp.flush()
+        subprocess.call([get_editor(), fp.name])
+
+        with open(fp.name, 'r') as rfp:
+            leave = [l.strip().split(' ')[-1] for l in rfp.readlines() if not l.startswith('#')]
+
+    remove = []
+    for k in font:
+        if k not in leave:
+            font.removeGlyph(k)
+            #font.selection[font[k]] = True
+            remove += [k]
+
+    if len(remove) == 0:
+        print('Nothing to be removed')
+        sys.exit(0)
+
+    if font.validate() != 0:
+        print(f'font.validate() failed; error 0x{font.validate():x}', file=sys.stderr)
+        for k in font:
+            if font[k].validation_state != 1:
+                g = font[k]
+                print(f'{k} U+{g.unicode:X}: error 0x{g.validation_state ^ 0x01:x}', file=sys.stderr)
+        sys.exit(1)
+
+    # (
+    # "'liga' Standard Ligatures in Latin lookup 0",
+    # "'dlig' Discretionary Ligatures in Latin lookup 1",
+    # "'frac' Diagonal Fractions in Latin lookup 2",
+    # "'sinf' Scientific Inferiors in Latin lookup 3",
+    # "'sups' Superscript in Latin lookup 4",
+    # "'ordn' Ordinals in Latin lookup 5",
+    # 'Single Substitution lookup 6')
+    # l  = "'sups' Superscript in Latin lookup 4"
+    # l2 = "'sups' Superscript in Latin lookup 4 subtable"
+
+    # font.getLookupInfo(l)
+    # ('gsub_single', (), (('sups', (('latn', ('dflt',)),)),))
+
+    # font.getLookupSubtables(l)
+    # ("'sups' Superscript in Latin lookup 4 subtable",)
+
+    # font.getLookupOfSubtable(l2)
+    # "'sups' Superscript in Latin lookup 4"
+    #
+    # g = font["zero"]
+    # g2 = font["zerosuperior"]
+    #
+    # g.getPosSub(l2)
+    # (("'sups' Superscript in Latin lookup 4 subtable", 'Substitution', 'zerosuperior'),)
+    #
+    # g.removePosSub("'sups' Superscript in Latin lookup 4 subtable")
+    #
+  
+    font.generate(dst)
+    size_after = os.path.getsize(dst)
+    print(f'Removed {len(remove)} glyphs, reducing the file by {(size_before-size_after)/1024:.1f}K to {size_after/1024:.1f}K')
