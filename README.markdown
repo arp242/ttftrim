@@ -17,7 +17,7 @@ After starting it will load a list of glyphs in `$EDITOR`; remove the lines you
 don't want, save, and exit.
 
 If `corpus` is given then it will automatically comment out the glyphs not found
-in the the corpus text:
+in the corpus text:
 
     $ ttftrim in.ttf out.ttf ~/code/arp242.net
 
@@ -32,10 +32,10 @@ For example before reducing the glyphs to those used only on my site:
 
 And after:
 
-    total 88K
-    -rw-r--r-- 1 martin martin 26K Nov 30 16:36 libre-baskerville-bold.woff2
-    -rw-r--r-- 1 martin martin 29K Nov 30 16:36 libre-baskerville-italic.woff2
-    -rw-r--r-- 1 martin martin 26K Nov 30 16:36 libre-baskerville.woff2
+    total 52K
+    -rw-r--r-- 1 martin martin 16K May 16 19:36 libre-baskerville-bold.woff2
+    -rw-r--r-- 1 martin martin 19K May 16 19:36 libre-baskerville-italic.woff2
+    -rw-r--r-- 1 martin martin 16K May 16 19:25 libre-baskerville.woff2
 
 ---
 

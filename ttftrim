@@ -44,6 +44,9 @@ def read_corpus(path):
 
     chars = set()
     for root, dirs, files in os.walk(path):
+        r = root[len(path):]
+        if ('.git' in r) or ('/.jekyll-cache/' in r):
+            continue
         for f in files:
             chars.update(get_chars(root+'/'+f))
     return chars
@@ -103,7 +106,6 @@ if __name__ == '__main__':
     for k in font:
         if k not in leave:
             font.removeGlyph(k)
-            #font.selection[font[k]] = True
             remove += [k]
 
     if len(remove) == 0:
@@ -116,7 +118,7 @@ if __name__ == '__main__':
             if font[k].validation_state != 1:
                 g = font[k]
                 print(f'{k} U+{g.unicode:X}: error 0x{g.validation_state ^ 0x01:x}', file=sys.stderr)
-        sys.exit(1)
+        print('This may not be a fatal error, so continuing anyway.')
 
     # (
     # "'liga' Standard Ligatures in Latin lookup 0",
